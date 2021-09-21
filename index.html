@@ -1,0 +1,210 @@
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      * {
+        margin: 0;
+      }
+    </style>
+    <!-- <link rel="stylesheet" type="text/css" href="styles.css"> -->
+  </head>
+  <body>
+    <script type="module">
+      'use strict';
+
+      import * as THREE from 'https://unpkg.com/three@0.126.0/build/three.module.js';
+      import { VRButton } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/webxr/VRButton.js';
+      import { OrbitControls } from 'https://unpkg.com/three@0.126.0/examples/jsm/controls/OrbitControls.js';
+
+      const clock = new THREE.Clock();
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+
+      document.body.appendChild(renderer.domElement);
+      document.body.appendChild(VRButton.createButton(renderer));
+
+      function vectorToString(v) {
+        return `(${v.x}, ${v.y}, ${v.z})`;
+      }
+
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.05,
+        100
+      );
+      camera.position.y = 1.5;
+      camera.position.z = 1.5;
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 0.75, 0);
+      controls.domElement.onpointerenter = function () {
+        controls.enabled = true;
+      };
+
+      controls.domElement.onpointerout = function () {
+        controls.enabled = false;
+      };
+
+      function resize() {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+      }
+      resize();
+      window.addEventListener('resize', resize, false);
+
+      // create the root of a scene graph
+      const scene = new THREE.Scene();
+
+      const fadeColor = 0xa0a0c5;
+      scene.background = new THREE.Color(fadeColor);
+      scene.fog = new THREE.Fog(fadeColor, 0.1, 12);
+
+      const geometry = new THREE.BoxGeometry();
+      const material = new THREE.MeshLambertMaterial();
+      const cube = new THREE.Mesh(geometry, material);
+
+      // position the cube, and add it to the scene:
+      cube.position.y = 1.5;
+      cube.position.z = -2.0;
+      cube.castShadow = true;
+      scene.add(cube);
+
+      const secondCube = new THREE.Mesh(geometry, material);
+      secondCube.position.y = 1.5;
+      secondCube.position.z = -2.0;
+      secondCube.position.x = 1.5;
+      secondCube.castShadow = true;
+      scene.add(secondCube);
+
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), material);
+      floor.receiveShadow = true;
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+
+      const grid = new THREE.GridHelper(35, 35, 0x333366, 0x666666);
+      scene.add(grid);
+
+      const light = new THREE.HemisphereLight(0x445599, 0x202555);
+      scene.add(light);
+
+      const directional = new THREE.DirectionalLight(0xfff2dd, 1.0);
+      directional.position.set(-1, 7, 0.5);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      directional.castShadow = true;
+      scene.add(directional);
+
+      const ico = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.1),
+        new THREE.MeshLambertMaterial({ color: 0xff0000 })
+      );
+      ico.position.z = -1;
+      scene.add(ico);
+
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+
+      function onMouseMove(event) {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      }
+      renderer.domElement.onmousemove = onMouseMove;
+
+      let gazeObject = null;
+
+      const particleCount = 100;
+      const particleSize = 0.3;
+      const particles = new THREE.InstancedMesh(
+        new THREE.PlaneGeometry(particleSize, particleSize),
+        new THREE.MeshBasicMaterial({ color: 0x22ff11, side: THREE.DoubleSide }),
+        particleCount
+      );
+      particles.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      scene.add(particles);
+
+      let particleInfo = [];
+      for (let i = 0; i < particleCount; i++) {
+        particleInfo.push({
+          position: new THREE.Vector3(0, -1, 0),
+          intensity: 0,
+        });
+      }
+
+      const dummy = new THREE.Object3D();
+
+      const readout = document.createElement('div');
+      readout.style.position = 'absolute';
+      readout.style.top = "0px";
+      document.body.appendChild(readout);
+
+      function animate() {
+        const dt = clock.getDelta();
+        controls.update(dt);
+
+        if (renderer.xr && renderer.xr.isPresenting) {
+          mouse.set(0, 0);
+        }
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects([
+          cube,
+          secondCube,
+          floor,
+        ]);
+
+        let newGaze = null;
+        if (intersects.length > 0) {
+          ico.position.copy(intersects[0].point);
+          newGaze = intersects[0].object;
+        }
+
+        let faintest = 0;
+        for (let i = 0; i < particleCount; i++) {
+          let d =
+            ico.position.distanceToSquared(particleInfo[i].position);
+
+          let h = Math.max(1.0 - d, 0);
+          
+          particleInfo[i].intensity = Math.min(1, Math.max(0,
+          particleInfo[i].intensity + (h - particleInfo[i].intensity) * dt ))
+          
+          if (particleInfo[i].intensity < particleInfo[faintest].intensity)
+            faintest = i;
+
+          dummy.position.copy(particleInfo[i].position);
+          dummy.rotation.y = i;
+          dummy.rotation.z = Math.PI/4;
+          dummy.position.y += (particleInfo[i].intensity - 0.7) * particleSize * 2.5;
+          dummy.updateMatrix();
+          particles.setMatrixAt(i, dummy.matrix);
+        }
+        particles.instanceMatrix.needsUpdate = true;
+
+        if (particleInfo[faintest].intensity < 0.05) {
+          particleInfo[faintest].position.random();
+          particleInfo[faintest].position.multiplyScalar(0.5);
+          particleInfo[faintest].position.add(ico.position);
+          particleInfo[faintest].intensity = 0.05;
+        } else {
+          particleInfo[faintest].intensity *= 0.8;
+        }
+        
+        
+        //console.log(`${faintest}: ${particleInfo[faintest].position.x}`);
+
+        // update the scene:
+        cube.rotation.x += 0.01;
+        cube.rotation.y += 0.01;
+
+        // draw the scene:
+        renderer.render(scene, camera);        
+      }
+      // start!
+      renderer.setAnimationLoop(animate);
+    </script>
+  </body>
+</html>
