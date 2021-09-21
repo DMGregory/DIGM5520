@@ -38,15 +38,18 @@
       camera.position.y = 1.5;
       camera.position.z = 1.5;
 
+
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.target.set(0, 0.75, 0);
+
+      /*
       controls.domElement.onpointerenter = function () {
         controls.enabled = true;
       };
 
       controls.domElement.onpointerout = function () {
         controls.enabled = false;
-      };
+      };*/
 
       function resize() {
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -59,9 +62,9 @@
       // create the root of a scene graph
       const scene = new THREE.Scene();
 
-      const fadeColor = 0x3030c5;
+      const fadeColor = 0x5099c5;
       scene.background = new THREE.Color(fadeColor);
-      scene.fog = new THREE.FogExp2(fadeColor, 0.3);
+      scene.fog = new THREE.FogExp2(fadeColor, 0.1);
 
       const geometry = new THREE.BoxGeometry();
       const material = new THREE.MeshLambertMaterial();
@@ -116,7 +119,7 @@
 
       let gazeObject = null;
 
-      const particleCount = 100;
+      const particleCount = 200;
       const particleSize = 0.3;
       const particleColor = 0x22ff33;
       const particleGeo = new THREE.PlaneGeometry(particleSize, particleSize);
@@ -127,7 +130,7 @@
       const particleFeet = new THREE.InstancedMesh(
         particleGeo,
         new THREE.MeshBasicMaterial({
-          color: particleColor,
+          color: 0x11e533,
           alphaMap: rootTex,
           alphaTest: 0.5,
         }),
@@ -140,10 +143,15 @@
         'https://cdn.jsdelivr.net/gh/DMGregory/DIGM5520@master/Week1/GrassParticleCutout.jpg'
       );
 
+      const grassGrad = new THREE.TextureLoader().load(
+        'https://cdn.jsdelivr.net/gh/DMGregory/DIGM5520@master/Week1/WhiteBlueGradientSwatch.jpg'
+      );
+
       const particles = new THREE.InstancedMesh(
         particleGeo,
         new THREE.MeshBasicMaterial({
           color: particleColor,
+          map: grassGrad,
           alphaMap: grassTex,
           alphaTest: 0.5,
           side: THREE.DoubleSide,
@@ -169,8 +177,14 @@
       readout.style.top = '0px';
       document.body.appendChild(readout);
 
+
+
+
+
       function animate() {
         const dt = clock.getDelta();
+        const t = clock.getElapsedTime();
+
         controls.update(dt);
 
         if (renderer.xr && renderer.xr.isPresenting) {
@@ -197,13 +211,13 @@
           let d = ico.position.distanceToSquared(p.position) * 2;
 
           let h = Math.max(1.0 - d, 0);
-
-          if (h > 0) {
-            near++;
+          
+          if (h > 0) {            
             p.intensity = Math.min(
               1,
               Math.max(0, p.intensity + 0.01 * (h - p.intensity))
             );
+            if (h > 0.7) near++;
           } else {
             p.intensity = Math.max(0, p.intensity - (1 - p.intensity) * 0.01);
           }
@@ -214,14 +228,14 @@
 
           dummy.position.y += 0.01;
           dummy.rotation.set(-Math.PI / 2, 0, i);
-          const s = Math.max(Math.sqrt(p.intensity) - 0.2, 0)*2;
+          const s = Math.max(p.intensity - 0.2, 0)*2;
           dummy.scale.set(s, s, s);
           dummy.updateMatrix();
           particleFeet.setMatrixAt(i, dummy.matrix);
 
           dummy2.position.copy(p.position);
           dummy2.position.y += (p.intensity - 0.5) * particleSize * 1.2;
-          dummy2.rotation.set(0, i, -Math.PI/4);
+          dummy2.rotation.set(0, i, -Math.PI/4 + Math.sin(3 * t + i)*0.1);
           dummy2.scale.set(1, 1, 1);
           dummy2.updateMatrix();
           particles.setMatrixAt(i, dummy2.matrix);
@@ -229,7 +243,7 @@
         particles.instanceMatrix.needsUpdate = true;
         particleFeet.instanceMatrix.needsUpdate = true;
 
-        if (near < particleCount/2 && particleInfo[faintest].intensity < 0.01) {
+        if (near < particleCount * 0.5 && particleInfo[faintest].intensity < 0.01) {
           if (newGaze == floor) {
             particleInfo[faintest].position.random();
             particleInfo[faintest].position.multiplyScalar(0.5);
@@ -244,6 +258,9 @@
         // update the scene:
         cube.rotation.x += 0.01;
         cube.rotation.y += 0.01;
+
+        ico.rotation.x -= 0.01;
+        ico.rotation.y -= 0.01;
 
         // draw the scene:
         renderer.render(scene, camera);
