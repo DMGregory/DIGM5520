@@ -116,11 +116,18 @@
 
       let gazeObject = null;
 
+      const grassTex = new THREE.TextureLoader().load("https://cdn.jsdelivr.net/gh/DMGregory/DIGM5520@master/Week1/GrassParticle.png");
+
       const particleCount = 100;
       const particleSize = 0.3;
       const particles = new THREE.InstancedMesh(
         new THREE.PlaneGeometry(particleSize, particleSize),
-        new THREE.MeshBasicMaterial({ color: 0x22ff11, side: THREE.DoubleSide }),
+        new THREE.MeshBasicMaterial({ 
+          color: 0x22ff11,
+          transparent: true,
+          alphaMap: grassTex,
+          side: THREE.DoubleSide,
+          depthWrite: false }),
         particleCount
       );
       particles.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -177,8 +184,8 @@
 
           dummy.position.copy(particleInfo[i].position);
           dummy.rotation.y = i;
-          dummy.rotation.z = Math.PI/4;
-          dummy.position.y += (particleInfo[i].intensity - 0.7) * particleSize * 2.5;
+          dummy.rotation.z = -Math.PI/4;
+          //dummy.position.y += (particleInfo[i].intensity - 0.7) * particleSize * 2.5;
           dummy.updateMatrix();
           particles.setMatrixAt(i, dummy.matrix);
         }
