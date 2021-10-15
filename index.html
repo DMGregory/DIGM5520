@@ -37,7 +37,6 @@
   using the same intensity value.
 -->
 
-
 <html>
   <head>
     <meta charset="UTF-8" />
@@ -77,7 +76,7 @@
       camera.position.y = 1.5;
       camera.position.z = 1.5;
 
-      // Size the canvas to the current screen, and keep it up to date 
+      // Size the canvas to the current screen, and keep it up to date
       // if the window changes size.
       function resize() {
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -95,48 +94,8 @@
       // create the root of a scene graph
       const scene = new THREE.Scene();
 
-      // Create a plain grey material we can use for some simple scenery.
-      const material = new THREE.MeshLambertMaterial();
-
-
-      // Add some fog matched to our background colour to hide
-      // where the world ends, and give it some atmospheric perspective.
-      
-      // I found this trick from https://threejs.org/examples/#webgl_loader_fbx
-      // along with the floor and grid that come next, but I made my 
-      // background blue to look a bit more inviting and sky-like, and 
-      // to work with the bluish shadows I painted into my grass textures.
-      const fadeColor = 0x5099c5;
-      scene.background = new THREE.Color(fadeColor);
-      scene.fog = new THREE.FogExp2(fadeColor, 0.1);
-
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), material);
-      floor.receiveShadow = true;
-      floor.rotation.x = -Math.PI / 2;
-      scene.add(floor);
-
-      const grid = new THREE.GridHelper(35, 35, 0x333366, 0x666666);
-      scene.add(grid);
-
-      const geometry = new THREE.BoxGeometry();
-      
-      const cube = new THREE.Mesh(geometry, material);
-
-      // position the cube, and add it to the scene:
-      cube.position.y = 1.5;
-      cube.position.z = -2.0;
-      cube.castShadow = true;
-      scene.add(cube);
-
-      const secondCube = new THREE.Mesh(geometry, material);
-      secondCube.position.y = 1.5;
-      secondCube.position.z = -2.0;
-      secondCube.position.x = 1.5;
-      secondCube.castShadow = true;
-      scene.add(secondCube);
-
-
-
+      // Shine some light in the scene to lighten it up
+      // and differentiate surfaces pointed in different directions.
       const light = new THREE.HemisphereLight(0xfffcee, 0x202555);
       scene.add(light);
 
@@ -151,6 +110,44 @@
       scene.add(directional);
       */
 
+      // Create a plain grey material we can use for some simple scenery.
+      const material = new THREE.MeshLambertMaterial();
+
+      // Add some fog matched to our background colour to hide
+      // where the world ends, and give it some atmospheric perspective.
+
+      // I found this trick from https://threejs.org/examples/#webgl_loader_fbx
+      // along with the floor and grid that come next, but I made my
+      // background blue to look a bit more inviting and sky-like, and
+      // to work with the bluish shadows I painted into my grass textures.
+      const fadeColor = 0x5099c5;
+      scene.background = new THREE.Color(fadeColor);
+      scene.fog = new THREE.FogExp2(fadeColor, 0.1);
+
+      // Create a big plane and lay it down flat to act as our floor.
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), material);
+      floor.receiveShadow = true;
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+
+      // Overlay a faint grid we can use as a landmark to tell where we're looking / how
+      // we're moving when no other objects are visible in front of us.
+      const grid = new THREE.GridHelper(35, 35, 0x333366, 0x666666);
+      scene.add(grid);
+
+      // Create a spinning cube - example from class - makes a good focal point
+      // and a proof that the app isn't frozen. :D
+      const geometry = new THREE.BoxGeometry();
+      const cube = new THREE.Mesh(geometry, material);
+
+      // Position the cube above the ground, in front of the camera,
+      // and add it to the scene:
+      cube.position.y = 1.5;
+      cube.position.z = -2.0;
+      cube.castShadow = true;
+      scene.add(cube);
+
+      // Create a little red icosahedron to show us where our gaze point is in the world.
       const ico = new THREE.Mesh(
         new THREE.IcosahedronGeometry(0.1),
         new THREE.MeshLambertMaterial({ color: 0xff0000 })
@@ -158,10 +155,16 @@
       ico.position.z = -1;
       scene.add(ico);
 
+      // Create a raycaster object to detect where the pointer/gaze ray intersects the scene,
+      // and a mouse position vector to make this ray follow the mouse pointer in non-VR.
       const raycaster = new THREE.Raycaster();
       const mouse = new THREE.Vector2();
 
+      // When the mouse moves, cache its relative position in the camera viewport for raycasting.
       function onMouseMove(event) {
+        // Normalize position from (-1, -1) at the bottom-left of the canvas,
+        // through (0, 0) in the center of the canvas,
+        // to (1, 1) in the top-right.
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
       }
@@ -169,143 +172,207 @@
 
       let gazeObject = null;
 
+      // Set up our grass particle system! First, a master control knob for how many particles to draw.
       const particleCount = 200;
-      const particleSize = 0.3;
+      // The grass texture is mostly white, so I can fine-tune the colour by adjusting this tint colour.
       const particleColor = 0x22ff33;
+      // We use a small square quad for each particle.
+      const particleSize = 0.3;
       const particleGeo = new THREE.PlaneGeometry(particleSize, particleSize);
 
+      // Load textures used by the particle system.
+      // First, a greyscale opacity mask used for the "splats" at the bottom of the grass.
       const rootTex = new THREE.TextureLoader().load(
         'https://cdn.jsdelivr.net/gh/DMGregory/DIGM5520@master/Week1/RootParticleCutout.jpg'
       );
-      const particleFeet = new THREE.InstancedMesh(
-        particleGeo,
-        new THREE.MeshBasicMaterial({
-          color: 0x11e533,
-          alphaMap: rootTex,
-          alphaTest: 0.5,
-        }),
-        particleCount
-      );
-      particleFeet.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      scene.add(particleFeet);
-
+      // Then another opacity mask for the upright blades of grass.
       const grassTex = new THREE.TextureLoader().load(
         'https://cdn.jsdelivr.net/gh/DMGregory/DIGM5520@master/Week1/GrassParticleCutout.jpg'
       );
-
+      // And lastly a gradient, from white in one corner to pale grey-blue in the other.
+      // This is used to tint the green of the grass, so it has a little contrast and depth
+      // where near blades overlap ones farther away. (Though it's a bit subtle - I could push this further).
       const grassGrad = new THREE.TextureLoader().load(
         'https://cdn.jsdelivr.net/gh/DMGregory/DIGM5520@master/Week1/WhiteBlueGradientSwatch.jpg'
       );
 
+      // Create a batch of instanced quads for the splats ad the bottom of each grass particle.
+      const particleFeet = new THREE.InstancedMesh(
+        particleGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0x11e533, // Slightly darker than main particle colour, to match the gradient texture at the bottom.
+          alphaMap: rootTex, // Cutout texture with the shape of the splat/patch of grass radiating outward.
+          alphaTest: 0.5, // Cutout transparency, so we get correct sorting and faster rendering than alpha blending.
+        }),
+        particleCount
+      );
+      // We'll be updating the particles every frame, so Dynamic signals THREE.js to optimize for that use.
+      particleFeet.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      scene.add(particleFeet);
+
+      // Now we do the same for the upright parts of the blades.
       const particles = new THREE.InstancedMesh(
         particleGeo,
         new THREE.MeshBasicMaterial({
-          color: particleColor,
-          map: grassGrad,
-          alphaMap: grassTex,
-          alphaTest: 0.5,
-          side: THREE.DoubleSide,
+          color: particleColor, // Tint the grass green.
+          map: grassGrad, // Shade the base of the grass a little darker.
+          alphaMap: grassTex, // Cutout texture with the shape of the grass blades growing "up" (toward one corner).
+          alphaTest: 0.5, // Cutout transparency, so we get correct sorting and faster rendering than alpha blending.
+          side: THREE.DoubleSide, // The upright blades can be seen from in front or behind, vs the splats which only face upward.
         }),
         particleCount
       );
       particles.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       scene.add(particles);
 
-      let particleInfo = [];
+      // Create a buffer of particle positions (where to draw the grass)
+      // and intensities (how tall/thick the grass should be there).
+      const particleInfo = [];
       for (let i = 0; i < particleCount; i++) {
         particleInfo.push({
+          // Spawn all the grass under the floor where it's unseen to start with.
           position: new THREE.Vector3(0, -1, 0),
           intensity: 0,
         });
       }
 
-      const dummy = new THREE.Object3D();
-      const dummy2 = new THREE.Object3D();
-
-      const readout = document.createElement('div');
-      readout.style.position = 'absolute';
-      readout.style.top = '0px';
-      document.body.appendChild(readout);
-
-
-
-
-
+      // Main rendering loop.
       function animate() {
+        // Get timing info.
         const dt = clock.getDelta();
         const t = clock.getElapsedTime();
 
-        controls.update(dt);
-
         if (renderer.xr && renderer.xr.isPresenting) {
+          // If we're in VR, we always want the gaze raycast to go through the middle
+          // of the view, so pretend the mouse is locked right at the center.
           mouse.set(0, 0);
+        } else {
+          // Update the controls for mouse navigation, according to time passed.
+          controls.update(dt);
         }
 
+        // Fire a ray from the camera through the mouse position, and check what it interects.
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects([
-          cube,
-          secondCube,
-          floor,
-        ]);
+        const intersects = raycaster.intersectObjects([cube, floor]);
 
+        // Cache the object we've started looking at - maybe that will be interesting later.
         let newGaze = null;
+        // If our ray hit something, place our gaze-marking icosahedron there.
+        // and remember what we hit.
         if (intersects.length > 0) {
           ico.position.copy(intersects[0].point);
           newGaze = intersects[0].object;
         }
 
-        let faintest = 0;
-        let near = 0;
+        // Based on example here: https://threejs.org/examples/#webgl_instancing_dynamic
+        // we'll create a dummy object to help us build the transformation for each grass particle.
+        let dummy = new THREE.Object3D();
+        // We'll remember the index of the lowest-intensity particle we've found,
+        // so we can recycle it closer to the gaze/cursor.
+        let faintestIndex = 0;
+        // We'll also remember how many particles are "near" the gaze/cursor,
+        // so we can balance how many we spawn there.
+        let nearCount = 0;
         for (let i = 0; i < particleCount; i++) {
           let p = particleInfo[i];
-          let d = ico.position.distanceToSquared(p.position) * 2;
+          // Scaled, squared distance of the particle from the gaze/cursor.
+          // The 1.5 fudge factor lets me control how wide a patch of grass we get near the cursor.
+          // Bigger values = tighter, sharper. Lower values = wider, shallower falloff.
+          let d = ico.position.distanceToSquared(p.position) * 1.5;
 
+          // Get a smooth parabolic curve that's 1.0 dear the gaze/cursor,
+          // and falls off to zero a short distance away.
+          // This is our "target height" for the grass.
           let h = Math.max(1.0 - d, 0);
-          
-          if (h > 0) {            
+
+          if (h > 0) {
+            // If we want a positive height, gradually grow the particle up to that size.
+            const growthRate = 0.01;
             p.intensity = Math.min(
               1,
-              Math.max(0, p.intensity + 0.01 * (h - p.intensity))
+              Math.max(0, p.intensity + growthRate * (h - p.intensity))
             );
-            if (h > 0.7) near++;
+            // If we want quite a tall height, count this as one of the "nearby" particles.
+            if (h > 0.7) nearCount++;
           } else {
-            p.intensity = Math.max(0, p.intensity - (1 - p.intensity) * 0.01);
+            // Otherwise, shrink the particle down toward invisibility.
+            const shrinkRate = 0.01;
+            p.intensity = Math.max(
+              0,
+              p.intensity - (1 - p.intensity) * shrinkRate
+            );
           }
 
-          if (p.intensity < particleInfo[faintest].intensity) faintest = i;
+          // Updater which particle is the faintest (smallest / least visible).
+          if (p.intensity < particleInfo[faintestIndex].intensity)
+            faintestIndex = i;
 
+          // Position our particle quads, using the dummy object to help us build the matrix.
+
+          // First, the splat at the base of the grass should sit at the particle position...
           dummy.position.copy(p.position);
-
+          // ...and just a hair above it to keep it from Z-fighting with the floor below.
           dummy.position.y += 0.01;
+
+          // It should be rotated flat against the floor, but we can twist it in the plane
+          // pseudo-randomly using its particle index so that two particles side-by-side don't
+          // look exactly the same.
           dummy.rotation.set(-Math.PI / 2, 0, i);
-          const s = Math.max(p.intensity - 0.2, 0)*2;
+          //The splat should be zero scale for very short grass,
+          // but get bigger rapidly as the grass grows to cover the seam.
+          const s = Math.max(p.intensity - 0.2, 0) * 2;
           dummy.scale.set(s, s, s);
+          // Apply the matrix we've built to this particle in the particle feet instanced buffer.
           dummy.updateMatrix();
           particleFeet.setMatrixAt(i, dummy.matrix);
 
-          dummy2.position.copy(p.position);
-          dummy2.position.y += (p.intensity - 0.5) * particleSize * 1.2;
-          dummy2.rotation.set(0, i, -Math.PI/4 + Math.sin(3 * t + i)*0.1);
-          dummy2.scale.set(1, 1, 1);
-          dummy2.updateMatrix();
-          particles.setMatrixAt(i, dummy2.matrix);
+          // Now for the upright grass. It should also sit at the particle position....
+          dummy.position.copy(p.position);
+          // ..but lower so it's not seen right away, and it should rise up so that it's fully grown at intensity = 1.
+          dummy.position.y += (p.intensity - 0.5) * particleSize * 1.2;
+          // The grass texture runs diagonally across the quad to make better use of the space,
+          // so twist the quat 45 degrees to make it point up.
+          // Again give it a pseudo-random yaw using its index
+          // so the blades aren't all in one plane, and criss-cross
+          // from every viewing angle to look nice and full.
+          dummy.rotation.set(0, i, -Math.PI / 4 + Math.sin(3 * t + i) * 0.1);
+          // THe upright blades are always full-scale.
+          dummy.scale.set(1, 1, 1);
+          // Apply this matrix to the particle quad.
+          dummy.updateMatrix();
+          particles.setMatrixAt(i, dummy.matrix);
         }
+        // Ask our instanced mesh to refresh with the latest transform info we gave it.
         particles.instanceMatrix.needsUpdate = true;
         particleFeet.instanceMatrix.needsUpdate = true;
 
-        if (near < particleCount * 0.5 && particleInfo[faintest].intensity < 0.01) {
+        // If we have room for more grass near the gaze / cursor, and we have some old grass
+        // that's faint enough we could teleport it without visible popping...
+        if (
+          nearCount < particleCount * 0.5 &&
+          particleInfo[faintestIndex].intensity < 0.01
+        ) {
+          // ...then recycle that particle as a new patch of grass near the gaze/cursor.
+          let recycle = particleInfo[faintestIndex];
           if (newGaze == floor) {
-            particleInfo[faintest].position.random();
-            particleInfo[faintest].position.multiplyScalar(0.5);
-            particleInfo[faintest].position.y = 0;
-            particleInfo[faintest].position.add(ico.position);
-            particleInfo[faintest].intensity = 0.1;
+            // Give it a random position offset from -0.6 to +0.6 on the x & z,
+            recycle.position.random();
+            recycle.position.multiplyScalar(0.6);
+            // ...but zero on the y so it still sits perfetly along the floor level.
+            recycle.position.y = 0;
+
+            // Add this randomized offset to the gaze-tracker's position.
+            recycle.position.add(ico.position);
+            // Initialize the intensity of this new particle high enough so that we won't try to
+            // re-recycle it again the very next frame.
+            recycle.intensity = 0.1;
           }
         } else {
-          particleInfo[faintest].intensity *= 0.5;
+          // If we can't recycle old grass yet, accelerate its shrinking so we can recycle it soon!
+          particleInfo[faintestIndex].intensity *= 0.5;
         }
 
-        // update the scene:
+        // Spin the cube and gaze-tracking icosahedron for some idle animation.
         cube.rotation.x += 0.01;
         cube.rotation.y += 0.01;
 
