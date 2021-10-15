@@ -1,3 +1,43 @@
+<!--
+  Douglas Gregory - 219033117
+
+  This was my first WebXR scne produced in week 1,
+  to get some practice working with THREE.js and VR in the browser.
+
+  It demonstrates some basics:
+  - Setting up an animated THREE.js scene with a button to enter VR
+  - Tracking an "attention point" in the scene using a raycast, from either
+    a browser user's mouse cursor, or the direction of a VR user's gaze.
+  - Spawning and animating a particle system with InstancedMesh
+
+  I wanted an interaction that would happen automatically when a user visited the scene,
+  so they wouldn't need to know some "trick" to activate it, and wouldn't require a
+  specialized input peripheral like an Oculus Touch controller (for now).
+
+  I also wanted it to convey a sense of the wonder of inhabiting a responsive virtual
+  space that can react to you in ways ordinary spaces don't. So I styled my particle
+  system as a patch of waving grass that would grow from the ground wherever you pointed
+  or looked, vibrant green against the plain greyish starting scene.
+
+  This works by spawning all the grass planes invisibly under the floor plane, and lifting/scaling
+  them to give the appearance of growth. A slight sinusoidal rotation is added to mimic wind.
+
+  I use an array of position vectors and intensity values for each particle. Particles near the gaze
+  grow in intensity (up to 1), and particles farther away reduce in intensity (toward zero).
+  I use these positions and intensity values to update the grass particle positions, higher
+  intensity = bigger/more fully risen above the floor, while low intensity shrinks down.
+
+  Each frame I grab a particle with low enough intensity to be invisible (if there are any)
+  and teleport it to a random position near the gaze point, to build up the density there. 
+
+  The grass consists of two quad parts: the upright blades that rise out of the ground,
+  and an outward "splat" that sits against the ground plane and scales up as the grass grows,
+  helping to mask the sharp line where the upright quads intersect the floor.
+  I draw one of each part at each position in my array, driving the position/scale of both
+  using the same intensity value.
+-->
+
+
 <html>
   <head>
     <meta charset="UTF-8" />
@@ -12,10 +52,12 @@
     <script type="module">
       'use strict';
 
+      // Import the modules we're using.
       import * as THREE from 'https://unpkg.com/three@0.126.0/build/three.module.js';
       import { VRButton } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/webxr/VRButton.js';
       import { OrbitControls } from 'https://unpkg.com/three@0.126.0/examples/jsm/controls/OrbitControls.js';
 
+      // THREE.js setup boilerplate. Set up our clock, renderer, canvas, VR button.
       const clock = new THREE.Clock();
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setPixelRatio(window.devicePixelRatio);
@@ -25,10 +67,7 @@
       document.body.appendChild(renderer.domElement);
       document.body.appendChild(VRButton.createButton(renderer));
 
-      function vectorToString(v) {
-        return `(${v.x}, ${v.y}, ${v.z})`;
-      }
-
+      // Set up the camera far enough back to look at the spinning cube we made in class.
       const camera = new THREE.PerspectiveCamera(
         75,
         window.innerWidth / window.innerHeight,
@@ -38,19 +77,8 @@
       camera.position.y = 1.5;
       camera.position.z = 1.5;
 
-
-      const controls = new OrbitControls(camera, renderer.domElement);
-      controls.target.set(0, 0.75, 0);
-
-      /*
-      controls.domElement.onpointerenter = function () {
-        controls.enabled = true;
-      };
-
-      controls.domElement.onpointerout = function () {
-        controls.enabled = false;
-      };*/
-
+      // Size the canvas to the current screen, and keep it up to date 
+      // if the window changes size.
       function resize() {
         renderer.setSize(window.innerWidth, window.innerHeight);
         camera.aspect = window.innerWidth / window.innerHeight;
@@ -59,15 +87,39 @@
       resize();
       window.addEventListener('resize', resize, false);
 
+      // Set up controls for orbiting around the scene with click
+      // and drag in the browser.
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 0.75, 0);
+
       // create the root of a scene graph
       const scene = new THREE.Scene();
 
+      // Create a plain grey material we can use for some simple scenery.
+      const material = new THREE.MeshLambertMaterial();
+
+
+      // Add some fog matched to our background colour to hide
+      // where the world ends, and give it some atmospheric perspective.
+      
+      // I found this trick from https://threejs.org/examples/#webgl_loader_fbx
+      // along with the floor and grid that come next, but I made my 
+      // background blue to look a bit more inviting and sky-like, and 
+      // to work with the bluish shadows I painted into my grass textures.
       const fadeColor = 0x5099c5;
       scene.background = new THREE.Color(fadeColor);
       scene.fog = new THREE.FogExp2(fadeColor, 0.1);
 
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), material);
+      floor.receiveShadow = true;
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+
+      const grid = new THREE.GridHelper(35, 35, 0x333366, 0x666666);
+      scene.add(grid);
+
       const geometry = new THREE.BoxGeometry();
-      const material = new THREE.MeshLambertMaterial();
+      
       const cube = new THREE.Mesh(geometry, material);
 
       // position the cube, and add it to the scene:
@@ -83,23 +135,21 @@
       secondCube.castShadow = true;
       scene.add(secondCube);
 
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), material);
-      floor.receiveShadow = true;
-      floor.rotation.x = -Math.PI / 2;
-      scene.add(floor);
 
-      const grid = new THREE.GridHelper(35, 35, 0x333366, 0x666666);
-      scene.add(grid);
 
       const light = new THREE.HemisphereLight(0xfffcee, 0x202555);
       scene.add(light);
 
-      //const directional = new THREE.DirectionalLight(0xfff2dd, 1.0);
-      //directional.position.set(-1, 7, 0.5);
-      //renderer.shadowMap.enabled = true;
-      //renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-      //directional.castShadow = true;
-      //scene.add(directional);
+      /* I experimented with adding shadows, but they don't look so good
+      with the cartoon-style grass I made, so I turned them off again. 
+
+      const directional = new THREE.DirectionalLight(0xfff2dd, 1.0);
+      directional.position.set(-1, 7, 0.5);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      directional.castShadow = true;
+      scene.add(directional);
+      */
 
       const ico = new THREE.Mesh(
         new THREE.IcosahedronGeometry(0.1),
